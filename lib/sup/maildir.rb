@@ -151,6 +151,8 @@ module Redwood
         raise FatalSourceError, "Problem scanning Maildir directories: #{e.message}."
       end
 
+      @new_ids.sort!{ |a,b| @ids_to_mtimes[a] <=> @ids_to_mtimes[b] }
+
     end
     synchronized :scan_mailbox
 
@@ -159,6 +161,7 @@ module Redwood
       return if @last_scan.nil?
       @new_ids.each do |id|
         self.cur_offset = File.mtime( id_to_fn id ).to_i
+        @new_ids.delete(id)
         yield id, @labels + (seen?(id) ? [] : [:unread]) + (trashed?(id) ? [:deleted] : []) + (flagged?(id) ? [:starred] : [])
       end
     end
@@ -168,11 +171,11 @@ module Redwood
     end
 
     def end_offset
-      Time.now.to_i
+      cur_offset.to_f / ( 1.0 - @new_ids.length.to_f / @ids.length.to_f )
     end
 
     def done?
-      !@last_scan.nil? && !@new_ids.empty?
+      not @last_scan.nil? and not @new_ids.empty?
     end
 
     def pct_done
