@@ -27,6 +27,7 @@ module Redwood
       @labels = Set.new(labels || [])
       @ids = []
       @new_ids = []
+      @new_len = 0
       @ids_to_fns = {}
       @ids_to_mtimes = {}
       @last_scan = nil
@@ -152,6 +153,7 @@ module Redwood
       end
 
       @new_ids.sort!{ |a,b| @ids_to_mtimes[a] <=> @ids_to_mtimes[b] }
+      @new_len = @new_ids.length
 
     end
     synchronized :scan_mailbox
@@ -161,7 +163,7 @@ module Redwood
       return if @last_scan.nil?
       @new_ids.each do |id|
         self.cur_offset = File.mtime( id_to_fn id ).to_i
-        @new_ids.delete(id)
+        @new_len -= 1
         yield id, @labels + (seen?(id) ? [] : [:unread]) + (trashed?(id) ? [:deleted] : []) + (flagged?(id) ? [:starred] : [])
       end
     end
@@ -171,7 +173,7 @@ module Redwood
     end
 
     def end_offset
-      cur_offset.to_f / ( 1.0 - @new_ids.length.to_f / @ids.length.to_f )
+      cur_offset.to_f / ( 1.0 - @new_len.to_f / @ids.length.to_f )
     end
 
     def done?
@@ -179,13 +181,14 @@ module Redwood
     end
 
     def pct_done
-      100.0 - 100.0 * (@new_ids.length.to_f / @ids.length.to_f)
+      100.0 - 100.0 * (@new_len.to_f / @ids.length.to_f)
     end
 
     def reset!
       debug "reset called"
       self.cur_offset = 0
       @new_ids = @ids.sort{ |a,b| @ids_to_mtimes[a] <=> @ids_to_mtimes[b] }
+      @new_len = @new_ids.length
     end
 
     def acked? msg; File.basename(File.dirname(id_to_fn(msg))) == 'cur'; end
